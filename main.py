@@ -3,8 +3,12 @@ import random
 from deap import base, creator, tools, algorithms
 import matplotlib.pyplot as plt
 import networkx as nx
+import json
 
-
+def load_matrices(file_name):
+    with open(file_name, 'r') as f:
+        matrices = json.load(f)
+    return [np.array(matrix) for matrix in matrices]
 
 def generate_random_adjacency_matrix(low=2, high=8):
     n = random.randint(low, high)
@@ -50,23 +54,19 @@ def visualize_graph(adjacency_matrix, colors=None):
     plt.show()
 
 
-# Funkcja generująca losowy kolor
-def random_color():
-    return random.randint(0, NUM_COLORS - 1)
+def main(adj_mat, num_colors, params):
+    # Funkcja generująca losowy kolor
+    def random_color():
+        return random.randint(0, num_colors - 1)
 
-
-
-# Funkcja oceny (fitness)
-def evaluate(individual):
-    conflicts = 0
-    for i in range(len(individual)):
-        for j in range(i + 1, len(individual)):
-            if adjacency_matrix[i, j] == 1 and individual[i] == individual[j]:
-                conflicts += 1
-    return (conflicts,)
-
-
-def main():
+    # Funkcja oceny (fitness)
+    def evaluate(individual):
+        conflicts = 0
+        for i in range(len(individual)):
+            for j in range(i + 1, len(individual)):
+                if adj_mat[i, j] == 1 and individual[i] == individual[j]:
+                    conflicts += 1
+        return (conflicts,)
     # Tworzenie typów dla DEAP
     creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
     creator.create("Individual", list, fitness=creator.FitnessMin)
@@ -81,22 +81,19 @@ def main():
         tools.initRepeat,
         creator.Individual,
         toolbox.attr_color,
-        n=len(adjacency_matrix),
+        n=len(adj_mat),
     )
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
 
     # Funkcje genetyczne
     toolbox.register("evaluate", evaluate)
-    toolbox.register("mate", tools.cxTwoPoint)
-    toolbox.register("mutate", tools.mutUniformInt, low=0, up=NUM_COLORS - 1, indpb=0.1)
-    toolbox.register("select", tools.selTournament, tournsize=3)
-    # Parametry algorytmu
-    pop_size = 100
-    num_generations = 100
+    toolbox.register("mate", params["crossover_type"])
+    toolbox.register("mutate", tools.mutUniformInt, low=0, up=num_colors - 1, indpb=0.1)
+    toolbox.register("select", params["selection_type"], tournsize=3)
 
     # Tworzenie początkowej populacji
-    population = toolbox.population(n=pop_size)
+    population = toolbox.population(n=params["population_size"])
 
     # Statystyki
     stats = tools.Statistics(lambda ind: ind.fitness.values)
@@ -107,9 +104,9 @@ def main():
     population, logbook = algorithms.eaSimple(
         population,
         toolbox,
-        cxpb=0.7,  # prawdopodobieństwo krzyżowania
-        mutpb=0.2,  # prawdopodobieństwo mutacji
-        ngen=num_generations,
+        cxpb=params["crossover_rate"],  # prawdopodobieństwo krzyżowania
+        mutpb=params["mutation_rate"],  # prawdopodobieństwo mutacji
+        ngen=params["num_of_generations"],
         stats=stats,
         verbose=True,
     )
@@ -129,14 +126,16 @@ def main():
 
 
 if __name__ == "__main__":
-
-    # Definicja grafu za pomocą macierzy sąsiedztwa
-    # adjacency_matrix = np.array([[0, 1, 1, 0], [1, 0, 1, 1], [1, 1, 0, 1], [0, 1, 1, 0]])
-
-    adjacency_matrix = generate_random_adjacency_matrix(low=3, high=6)
-
-    # Liczba dostępnych kolorów
-    NUM_COLORS = 2
-    # Uruchomienie algorytmu
-    best_solution = main()
-    visualize_graph(adjacency_matrix, best_solution)
+    # best params
+    params = {
+        "crossover_rate" : 0.9140770311656784,
+        "crossover_type" : tools.cxTwoPoint,
+        "mutation_rate" : 0.4165544386688508,
+        "num_of_generations" : 424,
+        "population_size" : 306,
+        "selection_type" : tools.selTournament,
+    }
+    matrices = load_matrices("matrices.json")
+    for matrix in matrices:
+        best_solution = main(matrix, 7, params)
+        visualize_graph(matrix, best_solution)
